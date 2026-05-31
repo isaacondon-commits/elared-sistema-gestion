@@ -584,6 +584,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);font-si
 /* F24 burndown */
 .bdown-wrap{position:relative;height:220px}
 
+
+/* supervisor_senior */
+.tc.sscard{border-left-color:var(--ab)!important;border-left-style:dashed!important}
+.sec-hdr{font-size:11px;font-weight:700;color:var(--tm);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 7px;display:flex;align-items:center;gap:8px}
+.sec-hdr::after{content:'';flex:1;height:1px;background:var(--bd)}
+.rbadge-ss{font-size:10px;font-weight:700;padding:2px 7px;border-radius:100px;background:rgba(0,174,239,.15);color:var(--aa);border:1px solid var(--aa)}
+
 </style>
 </head>
 <body>
@@ -835,6 +842,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);font-si
             <div class="fg"><label>Contraseña</label><input type="text" id="newPass" placeholder="Contraseña segura" maxlength="60"></div>
           </div>
           <div class="fg"><label>Email del supervisor (para notificaciones)</label><input type="email" id="newEmail" placeholder="supervisor@gmail.com"></div>
+          <div class="fg"><label>Rol</label><div class="sw"><select id="newRol"><option value="supervisor">Supervisor</option><option value="supervisor_senior">Supervisor Senior</option></select></div></div>
           <button class="bp" onclick="addUser()">Agregar usuario</button>
         </div>
       </div>
@@ -1212,7 +1220,7 @@ async function doLogin(){
     const snap=await window._fbGets(window._usersCol);
     let found=null;
     snap.forEach(d=>{const data=d.data();if((data.usuario||'').toLowerCase()===user&&data.pass===pass)found={...data,id:d.id};});
-    if(found){ if(found.suspendido){err.textContent='Cuenta suspendida. Contactá al administrador.';err.style.display='block';} else setUser({usuario:found.usuario,nombre:found.nombre,rol:'supervisor',avatarUrl:found.avatarUrl||'',id:found.id}); }
+    if(found){ if(found.suspendido){err.textContent='Cuenta suspendida. Contactá al administrador.';err.style.display='block';} else setUser({usuario:found.usuario,nombre:found.nombre,rol:found.rol||'supervisor',avatarUrl:found.avatarUrl||'',id:found.id}); }
     else err.style.display='block';
   }catch(e){toast('Error de conexion');}
   btn.disabled=false;btn.textContent='Ingresar';
@@ -1242,16 +1250,19 @@ function cerrarSesion(auto=false){
   if(auto)toast('Sesion cerrada por inactividad');
 }
 
+function isSS(){return userRole==='supervisor_senior';}
+function isAdminOrSS(){return userRole==='admin'||userRole==='supervisor_senior';}
+
 function setupUI(){
   const isA=userRole==='admin';
+  const isSenior=isSS();
   document.getElementById('uName').textContent=currentUser.nombre;
-  document.getElementById('uRole').textContent=isA?'Admin':'Supervisor';
+  document.getElementById('uRole').textContent=isA?'Admin':isSenior?'Sup. Senior':'Supervisor';
   renderAv(currentUser.avatarUrl||'',currentUser.nombre,'hAv');
   ['nAdmin','nDash','nCal','nPapelera','nAct'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=isA?'block':'none';});
-  // nMipanel visible for all
   const mpTab=document.getElementById('nMipanel');if(mpTab)mpTab.style.display='block';
-  document.getElementById('supField').style.display=isA?'block':'none';
-  document.getElementById('supNoteField').style.display=isA?'none':'block';
+  document.getElementById('supField').style.display=isAdminOrSS()?'block':'none';
+  document.getElementById('supNoteField').style.display=isAdminOrSS()?'none':'block';
   document.getElementById('statsArea').style.display=isA?'block':'none';
   document.getElementById('filtrosArea').style.display=isA?'block':'none';
   document.getElementById('fOrigen').style.display=isA?'block':'none';
@@ -1259,9 +1270,13 @@ function setupUI(){
   document.getElementById('btnPdf').style.display=isA?'inline-block':'none';
   document.getElementById('hPend').style.display=isA?'inline':'none';
   if(!isA){
-    document.getElementById('supBanner').style.display='flex';
-    document.getElementById('supBannerName').textContent=currentUser.nombre;
-    document.getElementById('formTitle').textContent='Registrar tarea realizada';
+    if(!isSenior){
+      document.getElementById('supBanner').style.display='flex';
+      document.getElementById('supBannerName').textContent=currentUser.nombre;
+      document.getElementById('formTitle').textContent='Registrar tarea realizada';
+    } else {
+      document.getElementById('formTitle').textContent='Nueva tarea';
+    }
   }
   setPage('tareas');
 }
@@ -1320,9 +1335,10 @@ function listenCC(tid){
 async function saveTarea(){
   const titulo=(document.getElementById('titulo').value||'').trim();
   const isA=userRole==='admin';
-  const supervisor=isA?(document.getElementById('supervisor').value||''):currentUser.nombre;
+  const isSenior=isSS();
+  const supervisor=isAdminOrSS()?(document.getElementById('supervisor').value||''):currentUser.nombre;
   if(!titulo){toast('El titulo es obligatorio');document.getElementById('titulo').focus();return;}
-  if(isA&&!supervisor){toast('Selecciona un supervisor');return;}
+  if(isAdminOrSS()&&!supervisor){toast('Selecciona un supervisor');return;}
   const btn=document.getElementById('btnG');
   btn.disabled=true;btn.textContent='Guardando...';
   try{
@@ -1337,7 +1353,8 @@ async function saveTarea(){
       estado:document.getElementById('estado').value,
       fecha:document.getElementById('fecha').value,
       creador:currentUser.nombre,
-      esSup:!isA,
+      esSup:!isA&&!isSenior,
+      esSenior:isSenior,
       creadoEn:window._fbTS(),
       terminadoEn:null,
       horasEst:parseFloat(document.getElementById('horasEst')?.value||0)||0,
@@ -1347,12 +1364,11 @@ async function saveTarea(){
       frecuencia:_esRec?(document.getElementById('frecuencia')?.value||'semanal'):'',
       bloqueadaPor:''
     };
-    if(!isA){data.supNota=(document.getElementById('supNota').value||'').trim();}
+    if(!isAdminOrSS()){data.supNota=(document.getElementById('supNota').value||'').trim();}
     const ref=await window._fbAdd(window._colRef,data);
-    await window._fbAdd(window._histCol(ref.id),{tipo:'creacion',mensaje:isA?'Tarea creada':'Tarea registrada por supervisor',autor:currentUser.nombre,fecha:window._fbTS()});
-    // Notificar al admin si es del supervisor
+    await window._fbAdd(window._histCol(ref.id),{tipo:'creacion',mensaje:isA?'Tarea creada':isSenior?'Tarea creada por Sup. Senior':'Tarea registrada por supervisor',autor:currentUser.nombre,fecha:window._fbTS()});
     if(!isA){
-      await addNotif('admin','Nueva tarea de '+currentUser.nombre+': "'+titulo+'"','tarea',ref.id);
+      await addNotif('admin','Nueva tarea de '+currentUser.nombre+(isSenior?' (Sup. Senior)':'')+': "'+titulo+'"','tarea',ref.id);
     }
     ['titulo','descripcion','fecha','supNota','tags','horasEst'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('supervisor').value='';
@@ -1364,7 +1380,7 @@ async function saveTarea(){
     toast('Tarea guardada!');
     await logActividad('tarea_creada','creó la tarea "'+titulo+'"',{tareaId:ref.id,supervisor});
     // Send email to supervisor
-    if(isA && supervisor){
+    if(isAdminOrSS() && supervisor && supervisor !== currentUser.nombre){
       const emailSup = await getEmailSupervisor(supervisor);
       if(emailSup){
         await sendEmailTarea({titulo,descripcion:data.descripcion,supervisor,prioridad:data.prioridad,fecha:data.fecha,creador:currentUser.nombre}, emailSup);
@@ -1373,20 +1389,23 @@ async function saveTarea(){
       }
     }
   }catch(e){toast('Error al guardar');}
-  btn.disabled=false;btn.textContent=userRole==='admin'?'Guardar tarea':'Registrar tarea';
+  btn.disabled=false;btn.textContent=isAdminOrSS()?'Guardar tarea':'Registrar tarea';
 }
 
 function editTarea(id){
   const t=tareas.find(x=>x.id===id);if(!t)return;
   const isA=userRole==='admin';
-  const canEdit=isA||(currentUser?.nombre===t.supervisor)||(currentUser?.nombre===t.creador);
+  const isSenior=isSS();
+  const seniorCreated=isSenior&&t.creador===currentUser.nombre;
+  const canEditFull=isA||seniorCreated;
+  const canEdit=canEditFull||(currentUser?.nombre===t.supervisor)||(currentUser?.nombre===t.creador);
   document.getElementById('mId').value=t.id;
-  document.getElementById('mTit').value=t.titulo||'';document.getElementById('mTit').readOnly=!canEdit;
-  document.getElementById('mDesc').value=t.descripcion||'';document.getElementById('mDesc').readOnly=!isA;
-  document.getElementById('mSup').value=t.supervisor||'';document.getElementById('mSup').disabled=!isA;
-  document.getElementById('mPrio').value=t.prioridad||'media';document.getElementById('mPrio').disabled=!isA;
+  document.getElementById('mTit').value=t.titulo||'';document.getElementById('mTit').readOnly=!canEditFull;
+  document.getElementById('mDesc').value=t.descripcion||'';document.getElementById('mDesc').readOnly=!canEditFull;
+  document.getElementById('mSup').value=t.supervisor||'';document.getElementById('mSup').disabled=!canEditFull;
+  document.getElementById('mPrio').value=t.prioridad||'media';document.getElementById('mPrio').disabled=!canEditFull;
   document.getElementById('mEst').value=t.estado||'pendiente';
-  document.getElementById('mF').value=t.fecha||'';document.getElementById('mF').readOnly=!isA;
+  document.getElementById('mF').value=t.fecha||'';document.getElementById('mF').readOnly=!canEditFull;
   const _mHE=document.getElementById('mHorasEst');if(_mHE)_mHE.value=t.horasEst||0;
   const _mHR=document.getElementById('mHorasReal');if(_mHR)_mHR.value=t.horasReal||0;
   const _mAv=document.getElementById('mAvance');if(_mAv){_mAv.value=t.avance||0;document.getElementById('mAvVal').textContent=(t.avance||0)+'%';}
@@ -1399,13 +1418,14 @@ function editTarea(id){
   const _mDup=document.getElementById('mBtnDup');if(_mDup)_mDup.style.display=isA?'inline-flex':'none';
   // Nota del supervisor
   const notaWrap=document.getElementById('mNotaWrap');
-  if(t.esSup||!isA){
+  if(t.esSup||(!isA&&!isSenior)){
     notaWrap.style.display='block';
     document.getElementById('mNota').value=t.supNota||'';
-    document.getElementById('mNota').readOnly=isA; // Admin solo lee, sup puede editar
+    document.getElementById('mNota').readOnly=isA;
   } else {notaWrap.style.display='none';}
   document.getElementById('mCC').textContent=ccounts[id]||0;
-  document.getElementById('mBtnElim').style.display=isA?'block':'none';
+  document.getElementById('mBtnElim').style.display=(isA||seniorCreated)?'block':'none';
+  const _mDup2=document.getElementById('mBtnDup');if(_mDup2)_mDup2.style.display=(isA||seniorCreated)?'inline-flex':'none';
   document.getElementById('mSaveBtn').textContent=canEdit?'Guardar':'Solo comentarios';
   document.getElementById('mSaveBtn').disabled=!canEdit;
   switchTab('editar');
@@ -1416,18 +1436,21 @@ function editTarea(id){
 async function saveEdit(){
   const id=document.getElementById('mId').value;
   const isA=userRole==='admin';
-  const titulo=(document.getElementById('mTit').value||'').trim();
-  if(isA&&!titulo){toast('El titulo es obligatorio');return;}
+  const isSenior=isSS();
   const t=tareas.find(x=>x.id===id);
+  const seniorCreated=isSenior&&t?.creador===currentUser.nombre;
+  const canEditFull=isA||seniorCreated;
+  const titulo=(document.getElementById('mTit').value||'').trim();
+  if(canEditFull&&!titulo){toast('El titulo es obligatorio');return;}
   const nuevoEst=document.getElementById('mEst').value;
-  const nuevoSup=isA?(document.getElementById('mSup').value||''):(t?.supervisor||'');
+  const nuevoSup=canEditFull?(document.getElementById('mSup').value||''):(t?.supervisor||'');
   const cambios=[];
   if(t){
     if(t.estado!==nuevoEst){
       const EL={pendiente:'Pendiente',proceso:'En proceso',terminada:'Terminada'};
       cambios.push('Estado: '+(EL[t.estado]||t.estado)+' -> '+(EL[nuevoEst]||nuevoEst));
     }
-    if(isA&&t.supervisor!==nuevoSup&&nuevoSup)cambios.push('Supervisor: '+(t.supervisor||'no asignado')+' -> '+nuevoSup);
+    if(canEditFull&&t.supervisor!==nuevoSup&&nuevoSup)cambios.push('Supervisor: '+(t.supervisor||'no asignado')+' -> '+nuevoSup);
   }
   // F26: check blockade before marking done
   const _bloqId=document.getElementById('mBloq')?.value||'';
@@ -1463,9 +1486,8 @@ async function saveEdit(){
     if(cambios.length){
       logActividad('estado_cambio', cambios.join(' | '), {tareaId:id});
       await window._fbAdd(window._histCol(id),{tipo:'cambio',mensaje:cambios.join(' | '),autor:currentUser.nombre,fecha:window._fbTS()});
-      if(isA&&nuevoSup)await addNotif(nuevoSup,'Tarea actualizada: "'+(t?.titulo||titulo)+'" - '+cambios.join(', '),'tarea',id);
-      // F22: email al supervisor en cambio de estado
-      if(isA&&nuevoSup&&cambios.some(c=>c.includes('Estado'))){
+      if(canEditFull&&nuevoSup)await addNotif(nuevoSup,'Tarea actualizada: "'+(t?.titulo||titulo)+'" - '+cambios.join(', '),'tarea',id);
+      if(canEditFull&&nuevoSup&&cambios.some(c=>c.includes('Estado'))){
         getEmailSupervisor(nuevoSup).then(em=>{if(em)sendEmailTarea({titulo:titulo||t?.titulo||'',descripcion:t?.descripcion||'',supervisor:nuevoSup,prioridad:t?.prioridad||'media',fecha:t?.fecha||'',creador:currentUser.nombre},em);});
       }
     }
@@ -1475,7 +1497,8 @@ async function saveEdit(){
 }
 
 async function delTarea(id){
-  if(userRole!=='admin')return;
+  const _dt=tareas.find(x=>x.id===id);
+  if(userRole!=='admin'&&!(isSS()&&_dt?.creador===currentUser.nombre))return;
   await moverAPapelera(id);
 }
 
@@ -1679,7 +1702,7 @@ function loadAdmin(){
       +'<div class="ucuser">@'+esc(s.usuario||'')+' &middot; Pass: '+esc(s.pass||'')+emailStr+'</div>'
       +'</div></div>'
       +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-      +(s.suspendido?'<span class="sus-badge">Suspendido</span>':'<span class="rbadge" style="background:var(--al);color:var(--ab)">Supervisor</span>')
+      +(s.suspendido?'<span class="sus-badge">Suspendido</span>':s.rol==='supervisor_senior'?'<span class="rbadge-ss">Sup. Senior</span>':'<span class="rbadge" style="background:var(--al);color:var(--ab)">Supervisor</span>')
       +'<button class="bg" data-uid="'+s.id+'" onclick="abrirEditUser(this.dataset.uid)" style="padding:4px 9px;font-size:11px">&#9998; Editar</button>'
       +'<button class="'+(s.suspendido?'bp':'bg')+'" data-uid="'+s.id+'" data-sus="'+(s.suspendido?'1':'0')+'" onclick="suspBtn(this)" style="padding:4px 9px;font-size:11px">'+(s.suspendido?'Activar':'Suspender')+'</button>'
       +'<button class="bdr" data-uid="'+s.id+'" data-nombre="'+esc(s.nombre)+'" onclick="delUser(this.dataset.uid,this.dataset.nombre)" style="padding:4px 9px;font-size:11px">Eliminar</button>'
@@ -1695,11 +1718,13 @@ async function addUser(){
   if(supervisores.find(s=>(s.usuario||'').toLowerCase()===usuario)){toast('Ese usuario ya existe');return;}
   try{
     const email=(document.getElementById('newEmail')?.value||'').trim();
-    await window._fbAdd(window._usersCol,{nombre,usuario,pass,email,rol:'supervisor',avatarUrl:'',creadoEn:window._fbTS()});
+    const newRol=(document.getElementById('newRol')?.value)||'supervisor';
+    await window._fbAdd(window._usersCol,{nombre,usuario,pass,email,rol:newRol,avatarUrl:'',creadoEn:window._fbTS()});
     document.getElementById('newNombre').value='';
     document.getElementById('newUsuario').value='';
     document.getElementById('newPass').value='';
     const ne=document.getElementById('newEmail');if(ne)ne.value='';
+    const nr=document.getElementById('newRol');if(nr)nr.value='supervisor';
     toast(nombre+' agregado!');loadAdmin();
   }catch(e){toast('Error al agregar');}
 }
@@ -1731,6 +1756,7 @@ function sortTareas(arr){
 
 function render(){
   const isA=userRole==='admin';
+  const _rIsSenior=isSS();
   let fuente=tareas;
   if(!isA&&currentUser){
     fuente=tareas.filter(t=>t.supervisor===currentUser.nombre||t.creador===currentUser.nombre);
@@ -1768,7 +1794,14 @@ function render(){
 }
 
 function renderLista(vis,lista){
-  if(!vis.length){lista.innerHTML='<div class="empty"><div class="ei">▭</div><p>'+(tareas.length===0?'Todavia no hay tareas':'Sin resultados')+'</p></div>';return;}
+  if(isSS()){
+    const _mis=vis.filter(t=>t.supervisor===currentUser.nombre&&t.creador!==currentUser.nombre);
+    const _asi=vis.filter(t=>t.creador===currentUser.nombre);
+    const _blk=(arr,lbl)=>('<div class="sec-hdr">'+lbl+'</div>'+(arr.length?'<div class="tl">'+arr.map(cardHTML).join('')+'</div>':'<div style="color:var(--th);font-size:13px;padding:6px 2px">Sin tareas</div>'));
+    lista.innerHTML=_blk(_mis,'&#128100; Mis tareas ('+_mis.length+')')+_blk(_asi,'&#128203; Tareas que asigné ('+_asi.length+')');
+    setTimeout(initDrag,50);return;
+  }
+  if(!vis.length){lista.innerHTML='<div class="empty"><div class="ei">&#9645;</div><p>'+(tareas.length===0?'Todavia no hay tareas':'Sin resultados')+'</p></div>';return;}
   lista.innerHTML='<div class="tl">'+vis.map(cardHTML).join('')+'</div>';
   setTimeout(initDrag,50);
 }
@@ -2026,7 +2059,7 @@ function toggleUserMenu(){
   if(m.classList.contains('open')){
     document.getElementById('uMenuAv').innerHTML=currentUser.avatarUrl?'<img src="'+currentUser.avatarUrl+'" alt="">':initials(currentUser.nombre);
     document.getElementById('uMenuName').textContent=currentUser.nombre;
-    document.getElementById('uMenuRole').textContent=userRole==='admin'?'Administrador':'Supervisor';
+    document.getElementById('uMenuRole').textContent=userRole==='admin'?'Administrador':isSS()?'Supervisor Senior':'Supervisor';
   }
 }
 function closeUserMenu(){document.getElementById('uMenu').classList.remove('open');}
@@ -2427,7 +2460,8 @@ function checkVencimientos(){
   const porVencer = tareas.filter(t => {
     if(t.estado === 'terminada' || !t.fecha) return false;
     // Solo las tareas del usuario actual
-    if(userRole !== 'admin' && t.supervisor !== currentUser.nombre) return false;
+    if(userRole !== 'admin' && !isSS() && t.supervisor !== currentUser.nombre) return false;
+    if(isSS() && t.supervisor !== currentUser.nombre && t.creador !== currentUser.nombre) return false;
     return t.fecha === mananaStr;
   });
   
