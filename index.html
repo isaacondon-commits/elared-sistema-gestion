@@ -1509,7 +1509,8 @@ function loadComments(tid){
       const _tid2=document.getElementById('mId').value;
       cl.innerHTML=cs.map(c=>{
         const rxM=c.reacciones||{};
-        const rxH=['&#128077;','&#9989;','&#9888;'].map(e=>{const us=rxM[e]||[];const ac=us.includes(currentUser.nombre);return '<button class="rxn-btn'+(ac?' active':'')+'" onclick="toggleRxn(''+_tid2+'',''+c.id+'',''+e+'')">'+e+' '+(us.length||'')+'</button>';}).join('');
+        const _RXN_EMOJIS=['&#128077;','&#9989;','&#9888;'];
+        const rxH=_RXN_EMOJIS.map((e,ri)=>{const us=rxM[e]||[];const ac=us.includes(currentUser.nombre);return '<button class="rxn-btn'+(ac?' active':'')+'" data-tid="'+_tid2+'" data-cid="'+c.id+'" data-ri="'+ri+'" onclick="rxnClick(this)">'+e+' '+(us.length||'')+'</button>';}).join('');
         const txtH=esc(c.texto||'').replace(/@(\w[\w\s]*)/g,'<span class="cmention">@$1</span>');
         return '<div class="citem"><div class="cauth">'+esc(c.autor||'')+'</div><div class="ctxt">'+txtH+'</div><div class="rxns">'+rxH+'</div><div class="cdate">'+(c.fecha?.seconds?fmtDt(c.fecha.seconds*1000):'')+'</div></div>';
       }).join('');
@@ -1680,7 +1681,7 @@ function loadAdmin(){
       +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
       +(s.suspendido?'<span class="sus-badge">Suspendido</span>':'<span class="rbadge" style="background:var(--al);color:var(--ab)">Supervisor</span>')
       +'<button class="bg" data-uid="'+s.id+'" onclick="abrirEditUser(this.dataset.uid)" style="padding:4px 9px;font-size:11px">&#9998; Editar</button>'
-      +'<button class="'+(s.suspendido?'bp':'bg')+'" data-uid="'+s.id+'" data-sus="'+(s.suspendido?'1':'0')+'" onclick="toggleSuspender(this.dataset.uid,this.dataset.sus==='1')" style="padding:4px 9px;font-size:11px">'+(s.suspendido?'Activar':'Suspender')+'</button>'
+      +'<button class="'+(s.suspendido?'bp':'bg')+'" data-uid="'+s.id+'" data-sus="'+(s.suspendido?'1':'0')+'" onclick="suspBtn(this)" style="padding:4px 9px;font-size:11px">'+(s.suspendido?'Activar':'Suspender')+'</button>'
       +'<button class="bdr" data-uid="'+s.id+'" data-nombre="'+esc(s.nombre)+'" onclick="delUser(this.dataset.uid,this.dataset.nombre)" style="padding:4px 9px;font-size:11px">Eliminar</button>'
       +'</div></div>';
   }).join('');
@@ -1777,7 +1778,7 @@ function renderKanban(vis,lista){
   const labels={pendiente:'Pendiente',proceso:'En proceso',terminada:'Terminada'};
   lista.innerHTML='<div class="kanban">'+cols.map(col=>{
     const items=vis.filter(t=>t.estado===col);
-    return '<div class="kc" data-col="'+col+'" ondragover="kbDragOver(event,this)" ondrop="kbDrop(event,''+col+'')" ondragleave="this.style.outline=''"><div class="kch '+col+'">'+labels[col]+'<span class="kcc"><span>'+items.length+'</span></span></div><div class="kcards">'+(items.length?items.map(kbCard).join(''):'<div style="text-align:center;color:var(--th);font-size:12px;padding:18px">Sin tareas</div>')+'</div></div>';
+    return '<div class="kc" data-col="'+col+'" ondragover="kbDragOver(event,this)" ondrop="kbDrop(event,this.dataset.col)" ondragleave="kbDragLeave(this)"><div class="kch '+col+'">'+labels[col]+'<span class="kcc"><span>'+items.length+'</span></span></div><div class="kcards">'+(items.length?items.map(kbCard).join(''):'<div style="text-align:center;color:var(--th);font-size:12px;padding:18px">Sin tareas</div>')+'</div></div>';
   }).join('')+'</div>';
 }
 
@@ -3177,6 +3178,11 @@ function exportProdXls(){
 // F5: KANBAN DRAG & DROP
 // ═══════════════════════════════════════
 let _kbDragId=null;
+
+function kbDragLeave(el){el.style.outline='';}
+function subCbChange(cb){toggleSub(cb.dataset.tid,cb.dataset.sid,cb.checked);}
+function delSubBtn(btn){delSub(btn.dataset.tid,btn.dataset.sid);}
+
 function kbDragStart(e,id){_kbDragId=id;e.dataTransfer.effectAllowed='move';}
 function kbDragOver(e,col){e.preventDefault();col.style.outline='2px dashed var(--ab)';}
 async function kbDrop(e,newEst){
@@ -3251,7 +3257,7 @@ function loadSubtareas(tid){
       if(subLbl)subLbl.textContent=done+' / '+total+' completadas';
       if(mSubCnt)mSubCnt.textContent=total;
       if(!subs.length){subList.innerHTML='<div style="text-align:center;color:var(--th);font-size:12px;padding:12px">Sin subtareas</div>';return;}
-      subList.innerHTML=subs.map(s=>'<div class="sub-item"><input class="sub-cb" type="checkbox"'+(s.completada?' checked':'')+' onchange="toggleSub(''+tid+'',''+s.id+'',this.checked)"><span class="sub-txt'+(s.completada?' dsub':'')+'">'+esc(s.texto||'')+'</span><button class="sub-del" onclick="delSub(''+tid+'',''+s.id+'')" title="Eliminar">✕</button></div>').join('');
+      subList.innerHTML=subs.map(s=>'<div class="sub-item"><input class="sub-cb" type="checkbox"'+(s.completada?' checked':'')+' data-tid="'+tid+'" data-sid="'+s.id+'" onchange="subCbChange(this)"><span class="sub-txt'+(s.completada?' dsub':'')+'">'+esc(s.texto||'')+'</span><button class="sub-del" data-tid="'+tid+'" data-sid="'+s.id+'" onclick="delSubBtn(this)" title="Eliminar">✕</button></div>').join('');
     });
   }catch(e){}
 }
@@ -3297,7 +3303,7 @@ async function loadPlantillas(){
     const snap=await window._fbGets(col);
     let plts=[];snap.forEach(d=>plts.push({id:d.id,...d.data()}));
     if(!plts.length){el.innerHTML='<div style="color:var(--th);font-size:13px">Sin plantillas guardadas</div>';return;}
-    el.innerHTML=plts.map(p=>'<div class="plt-item"><span class="plt-name">'+esc(p.titulo||'')+'</span><div style="display:flex;gap:6px"><button class="bg" style="font-size:11px;padding:4px 9px" onclick="usarPlantilla(''+p.id+'')">Usar</button><button class="bdr" style="font-size:11px;padding:4px 9px" onclick="elimPlantilla(''+p.id+'')">✕</button></div></div>').join('');
+    el.innerHTML=plts.map(p=>'<div class="plt-item"><span class="plt-name">'+esc(p.titulo||'')+'</span><div style="display:flex;gap:6px"><button class="bg" style="font-size:11px;padding:4px 9px" data-id="'+p.id+'" onclick="usarPlantilla(this.dataset.id)">Usar</button><button class="bdr" style="font-size:11px;padding:4px 9px" data-id="'+p.id+'" onclick="elimPlantilla(this.dataset.id)">✕</button></div></div>').join('');
   }catch(e){el.innerHTML='<div style="color:var(--th);font-size:13px">Error al cargar</div>';}
 }
 async function usarPlantilla(id){
@@ -3426,6 +3432,7 @@ function previewAvatar(input){
 // ═══════════════════════════════════════
 // F20: SUSPEND USER
 // ═══════════════════════════════════════
+function suspBtn(btn){toggleSuspender(btn.dataset.uid, btn.dataset.sus==='1');}
 async function toggleSuspender(id,isSuspended){
   const newVal=!isSuspended;
   try{
@@ -3448,7 +3455,7 @@ function handleMention(inp){
   const matches=supervisores.filter(s=>s.nombre.toLowerCase().includes(query));
   if(!matches.length){dd.style.display='none';return;}
   dd.style.display='block';
-  dd.innerHTML=matches.slice(0,6).map(s=>'<div class="mention-it" onclick="insertMention(''+esc(s.nombre)+'')">'+esc(s.nombre)+'</div>').join('');
+  dd.innerHTML=matches.slice(0,6).map(s=>'<div class="mention-it" data-nombre="'+esc(s.nombre)+'" onclick="insertMention(this.dataset.nombre)">'+esc(s.nombre)+'</div>').join('');
 }
 function insertMention(nombre){
   const inp=document.getElementById('commentText');
@@ -3469,6 +3476,11 @@ function handleCmtKey(e){
 // ═══════════════════════════════════════
 // F23: REACTIONS
 // ═══════════════════════════════════════
+const _RXN_MAP=['👍','✅','⚠'];
+function rxnClick(btn){
+  const tid=btn.dataset.tid,cid=btn.dataset.cid,ri=parseInt(btn.dataset.ri||0);
+  toggleRxn(tid,cid,_RXN_MAP[ri]||'👍');
+}
 async function toggleRxn(tid,cid,emoji){
   try{
     const ref=window._fbDoc(window._db,'tareas',tid,'comentarios',cid);
@@ -3653,7 +3665,7 @@ function abrirDiaCal(dateStr){
   const PL={urgente:'🔴 Urgente',alta:'Alta',media:'Media',baja:'Baja'};
   const EC={pendiente:'bep',proceso:'bec',terminada:'bet'};
   const EL={pendiente:'Pendiente',proceso:'En proceso',terminada:'Terminada'};
-  content.innerHTML=dayTasks.map(t=>'<div style="background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:8px 10px;margin-bottom:7px;cursor:pointer" onclick="editTarea(''+t.id+'')"><p style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">'+esc(t.titulo||'')+'</p><div style="display:flex;gap:4px;flex-wrap:wrap"><span class="b '+(PC[t.prioridad]||'bm')+'"><span class="bdot"></span>'+(PL[t.prioridad]||'')+'</span><span class="b '+(EC[t.estado]||'bep')+'">'+(EL[t.estado]||'')+'</span></div></div>').join('');
+  content.innerHTML=dayTasks.map(t=>'<div style="background:var(--s2);border:1px solid var(--bd);border-radius:var(--rs);padding:8px 10px;margin-bottom:7px;cursor:pointer" data-tid="'+t.id+'" onclick="editTarea(this.dataset.tid)"><p style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:4px">'+esc(t.titulo||'')+'</p><div style="display:flex;gap:4px;flex-wrap:wrap"><span class="b '+(PC[t.prioridad]||'bm')+'"><span class="bdot"></span>'+(PL[t.prioridad]||'')+'</span><span class="b '+(EC[t.estado]||'bep')+'">'+(EL[t.estado]||'')+'</span></div></div>').join('');
   // Highlight urgent days in calendar
   document.querySelectorAll('.cal-day').forEach(el=>el.style.outline='');
   const hasUrgent=dayTasks.some(t=>t.prioridad==='urgente'&&t.estado!=='terminada');
